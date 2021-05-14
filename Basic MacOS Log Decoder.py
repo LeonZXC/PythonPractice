@@ -6,8 +6,10 @@
 import json
 import re
 from datetime import datetime, timedelta
-# import requests
+from typing import get_type_hints
+import requests
 
+# Read in raw log, handle broken line cases
 rawLog = input("Provide file path: ")
 with open(rawLog, 'r') as logFile:
     logs = []
@@ -17,10 +19,16 @@ with open(rawLog, 'r') as logFile:
         else:
             logs[-1] += '\n' + line
 
+# Perform regex operations and extract fields
 output = []
 url = "https://foo.com/bar"
 for line in logs:
-    match = re.search("(?P<timestamp>\w{3}\s\d{2}\s\d{2}:\d{2}:\d{2})\s(?P<hostname>\w+)\s(?P<processName>.*)\[(?P<processID>\d+)\].*:(?P<description>.*)", line)
+    # Check if launchd process for dedicated regex, otherwise general
+    launchdCheck = re.search('launchd\[1\]', line)
+    if (launchdCheck):
+        match = re.search("(?P<timestamp>\w{3}\s\d{2}\s\d{2}:\d{2}:\d{2})\s(?P<hostname>\w+)\s(?P<processName>.*)\[(?P<processID>\d+)\].*\):(?P<description>.*)", line)
+    else:
+        match = re.search("(?P<timestamp>\w{3}\s\d{2}\s\d{2}:\d{2}:\d{2})\s(?P<hostname>\w+)\s(?P<processName>.*)\[(?P<processID>\d+)\].*:(?P<description>.*)", line)
     if match:
         # Create timeWindow key from timestamp
         timeStr = str(match.group('timestamp'))
@@ -34,7 +42,7 @@ for line in logs:
             plusHourStr = "0" + plusHourStr
         hourWindow = dTimeStr + "00-" + plusHourStr + "00"
 
-        # Add keys to dictionary
+        # Add regex field keys to dictionary
         fields = {
             'timestamp': match.group('timestamp'),
             'timeWindow': hourWindow,
@@ -44,7 +52,9 @@ for line in logs:
             'description': match.group('description'),
             'numberOfOccurrence': 0
         }
-        print(fields['numberOfOccurrence'])
+        # Checks if devices have same requirements to consider as repeated occurrence
+        # Checks deviceName, timeWindow, processId and message description
+
         # If list is not empty
         if output:
             for fieldDict in output:
@@ -54,13 +64,10 @@ for line in logs:
                     fields['numberOfOccurrence'] = 1
             output.append(fields)
             fieldsJSON = json.dumps(fields) 
-            # requests.post(url, data=fieldsJSON)
-            print(fields)
+            requests.post(url, data=fieldsJSON)
         # If list is empty
         else:
-            print('reach beginning')
             fields['numberOfOccurrence'] = fields.get('numberOfOccurrence', 0) + 1
             output.append(fields)
             fieldsJSON = json.dumps(fields)
-            # requests.post(url, data=fieldsJSON)
-        continue
+            requests.post(url, data=fieldsJSON)
